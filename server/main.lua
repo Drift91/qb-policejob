@@ -393,6 +393,44 @@ QBCore.Commands.Add("paylawyer", Lang:t("commands.paylawyer"), {{name = "id",hel
     end
 end)
 
+QBCore.Commands.Add('fine', Lang:t("commands.fine"), {{name = 'id', help = Lang:t('info.player_id')}, {name = 'amount', help = Lang:t('info.amount')}}, false, function(source, args)
+    local biller = QBCore.Functions.GetPlayer(source)
+    local billed = QBCore.Functions.GetPlayer(tonumber(args[1]))
+    local amount = tonumber(args[2])
+    if biller.PlayerData.job.name == "police" then
+        if billed ~= nil then
+            if biller.PlayerData.citizenid ~= billed.PlayerData.citizenid then
+                if amount and amount > 0 then
+                    if billed.Functions.RemoveMoney('bank', amount, "paid-fine") then
+                        TriggerClientEvent('QBCore:Notify', source, Lang:t("info.fine_issued"), 'success')
+                        TriggerClientEvent('QBCore:Notify', billed.PlayerData.source, Lang:t("info.received_fine"))
+                        exports['qb-management']:AddMoney(biller.PlayerData.job.name, amount)
+                    elseif billed.Functions.RemoveMoney('cash', amount, "paid-fine") then
+                        TriggerClientEvent('QBCore:Notify', source, Lang:t("info.fine_issued"), 'success')
+                        TriggerClientEvent('QBCore:Notify', billed.PlayerData.source, Lang:t("info.received_fine"))
+                        exports['qb-management']:AddMoney(biller.PlayerData.job.name, amount)
+                    else
+                        MySQL.Async.insert('INSERT INTO phone_invoices (citizenid, amount, society, sender, sendercitizenid) VALUES (?, ?, ?, ?, ?)',{billed.PlayerData.citizenid, amount, biller.PlayerData.job.name, biller.PlayerData.charinfo.firstname, biller.PlayerData.citizenid}, function(id)
+                            if id then
+                                TriggerClientEvent('qb-phone:client:AcceptorDenyInvoice', billed.PlayerData.source, id, biller.PlayerData.charinfo.firstname, biller.PlayerData.job.name, biller.PlayerData.citizenid, amount, GetInvokingResource())
+                            end
+                        end)
+                        TriggerClientEvent('qb-phone:RefreshPhone', billed.PlayerData.source)
+                    end
+                else
+                    TriggerClientEvent('QBCore:Notify', source, Lang:t("error.amount_higher"), 'error')
+                end
+            else
+                TriggerClientEvent('QBCore:Notify', source, Lang:t("error.fine_yourself"), 'error')
+            end
+        else
+            TriggerClientEvent('QBCore:Notify', source, Lang:t("error.not_online"), 'error')
+        end
+    else
+        TriggerClientEvent('QBCore:Notify', source, Lang:t("error.on_duty_police_only"), 'error')
+    end
+end)
+
 QBCore.Commands.Add("anklet", Lang:t("commands.anklet"), {}, false, function(source)
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
